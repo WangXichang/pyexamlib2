@@ -52,11 +52,11 @@ class ScoreData():
     def read_rawdf(self):
         # self.df = pd.read_csv('d:/work/newgk/shanghai1711/cj17b.csv', sep='\t', index_col=0)
         self.rawdf = pd.read_csv(self.fs_file, sep='\t', index_col=0)
-        self.rawdf = self.rawdf[self.rawdf.ysw > 0]
-        self.dfswgwl = pd.DataFrame({'wl': [self.rawdf[self.rawdf.sw == x]['wl'].mean() for x in range(91)], 'sw': [x for x in range(91)]})
-        self.dfwlgsw = pd.DataFrame({'sw': [self.rawdf[self.rawdf.wl == x]['sw'].mean() for x in range(111)], 'wl': [x for x in range(111)]})
-        self.dfyswgwl = pd.DataFrame({'wl': [self.rawdf[self.rawdf.ysw == x]['wl'].mean() for x in range(450)], 'ysw': [x for x in range(450)]})
-        self.dfwlgysw = pd.DataFrame({'ysw': [self.rawdf[self.rawdf.wl == x]['ysw'].mean() for x in range(111)], 'wl': [x for x in range(111)]})
+        # self.rawdf = self.rawdf[self.rawdf.ysw > 0]
+        # self.dfswgwl = pd.DataFrame({'wl': [self.rawdf[self.rawdf.sw == x]['wl'].mean() for x in range(91)], 'sw': [x for x in range(91)]})
+        # self.dfwlgsw = pd.DataFrame({'sw': [self.rawdf[self.rawdf.wl == x]['sw'].mean() for x in range(111)], 'wl': [x for x in range(111)]})
+        # self.dfyswgwl = pd.DataFrame({'wl': [self.rawdf[self.rawdf.ysw == x]['wl'].mean() for x in range(450)], 'ysw': [x for x in range(450)]})
+        # self.dfwlgysw = pd.DataFrame({'ysw': [self.rawdf[self.rawdf.wl == x]['ysw'].mean() for x in range(111)], 'wl': [x for x in range(111)]})
         return
 
 

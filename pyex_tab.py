@@ -8,7 +8,7 @@ import pyex_lib as pl
 def df_to_table(dataframe,
                 title='new table',
                 pagelines=30,
-                writfile = 'temp.txt'):
+                writfile = '2015_2017score_stats.txt'):
     result_string = ''
     newtitle = ''
     pagewidth = 0

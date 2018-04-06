@@ -178,7 +178,7 @@ class PltScoreModel(ScoreTransformModel):
         self.__stdScorePoints = []
         self.__rawScorePercentPoints = []
         self.__rawScorePoints__ = []
-        self.__pltCoeff = {}
+        self.result_pltCoeff = {}
         self.__formulastr = ''
 
         return
@@ -239,7 +239,7 @@ class PltScoreModel(ScoreTransformModel):
 
         # transform score on each field
         df = self.input_score_dataframe.copy()
-        result_dataframe = {}
+        result_dataframe = None
         result_report_save = ''
         for i, fs in enumerate(self.input_score_fields_list):
             # create outdf
@@ -254,13 +254,18 @@ class PltScoreModel(ScoreTransformModel):
                 return
             # transform score
 
-            score_list = list(df2[fs].apply(self.__getscore, self.output_score_decimals))
+            score_list = list(df2[fs].apply(self.__get_plt_score))  # , self.output_score_decimals
             self.output_score_dataframe.loc[:, (fs + '_plt')] = score_list
             self._create_report()
             # print(self.output_score_dataframe.head())
 
-            # result_dataframe = pd.merge(result_dataframe, self.output_score_dataframe[[fs+'_plt']], right_index=True, left_index=True)
-            result_dataframe[fs] = self.output_score_dataframe
+            if i == 0:
+                result_dataframe = df.merge(self.output_score_dataframe[[fs+'_plt']],
+                                            how='left', right_index=True, left_index=True)
+            else:
+                result_dataframe = result_dataframe.merge(self.output_score_dataframe[[fs+'_plt']],
+                                                          how='left', right_index=True, left_index=True)
+            # result_dataframe[fs] = self.output_score_dataframe
             result_report_save += self.output_report_doc
 
         self.output_report_doc = result_report_save
@@ -269,11 +274,11 @@ class PltScoreModel(ScoreTransformModel):
 
     def _create_report(self):
         self.__formulastr = ['{0}*(x-{1})+{2}'.format(x[0], x[1], x[2])
-                             for x in self.__pltCoeff.values()]
+                             for x in self.result_pltCoeff.values()]
         self.output_report_doc = '\nraw score percent:{}'.format(self.__rawScorePercentPoints)
         self.output_report_doc += '\nraw score points :{}'.format(self.__rawScorePoints__)
         self.output_report_doc += '\nstd score points :{}'.format(self.__stdScorePoints)
-        self.output_report_doc += '\nformulacoefficent:{}'.format(self.__pltCoeff)
+        self.output_report_doc += '\nformulacoefficent:{}'.format(self.result_pltCoeff)
         self.output_report_doc += '\n formula descrbes:{}'.format(self.__formulastr)
 
     def report(self):
@@ -305,17 +310,19 @@ class PltScoreModel(ScoreTransformModel):
             y1 = self.__stdScorePoints[i - 1]
             x1 = self.__rawScorePoints__[i - 1]
             coff = math.floor(coff*10000)/10000
-            self.__pltCoeff[i] = [coff, x1, y1]
+            self.result_pltCoeff[i] = [coff, x1, y1]
         return True
 
-    def __getscore(self, x):
+    def __get_plt_score(self, x):
         for i in range(1, len(self.__stdScorePoints)):
             if x <= self.__rawScorePoints__[i]:
                 if self.output_score_decimals > 0:
-                    return np.round(self.__pltCoeff[i][0] * (x - self.__pltCoeff[i][1]) + self.__pltCoeff[i][2],
+                    return np.round(self.result_pltCoeff[i][0] * (x - self.result_pltCoeff[i][1]) +
+                                    self.result_pltCoeff[i][2],
                                     decimals=self.output_score_decimals)
                 else:
-                    return int(np.round(self.__pltCoeff[i][0] * (x - self.__pltCoeff[i][1]) + self.__pltCoeff[i][2]))
+                    return int(np.round(self.result_pltCoeff[i][0] * (x - self.result_pltCoeff[i][1]) +
+                                        self.result_pltCoeff[i][2]))
         return -1
 
     def __preprocess(self, field):
@@ -361,7 +368,7 @@ class PltScoreModel(ScoreTransformModel):
             return
 
         # transform score
-        score_list = list(self.input_score_dataframe[scorefieldname].apply(self.__getscore, self.output_score_decimals))
+        score_list = list(self.input_score_dataframe[scorefieldname].apply(self.__get_plt_score, self.output_score_decimals))
         self.output_score_dataframe.loc[:, scorefieldname + '_plt'] = score_list
 
         self._create_report()

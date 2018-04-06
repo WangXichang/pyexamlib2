@@ -9,7 +9,12 @@ def exp_scoredf_normal(mean=70, std=10, maxscore=100, minscore=0, samples=100000
                                 for x in range(samples)]})
 
 
-def test_model(name='plt-sd20', df=None, fields_list=[], decimals=0):
+def test_model(name='plt-sd20',
+               df=None,
+               fields_list=[],
+               decimals=0,
+               min_score=0,
+               max_score=150):
     if type(df) != pd.DataFrame:
         print('no score df given!')
         return
@@ -23,7 +28,9 @@ def test_model(name='plt-sd20', df=None, fields_list=[], decimals=0):
 
         pltmodel.output_score_decimals = decimals
         pltmodel.set_data(score_dataframe=df, score_fields_list=fields_list)
-        pltmodel.set_parameters(rawpoints, stdpoints)
+        pltmodel.set_parameters(rawpoints, stdpoints,
+                                input_score_min=min_score,
+                                input_score_max=max_score)
         pltmodel.run()
 
         pltmodel.report()
@@ -40,7 +47,7 @@ def test_model(name='plt-sd20', df=None, fields_list=[], decimals=0):
         # stdpoints = [0, 15, 30, 50, 70, 85, 100]  # std=15
         stdpoints = [20, 25, 40, 60, 80, 95, 100]  # std=15
 
-        pltmodel.set_data(scoredf, fields_list)
+        pltmodel.set_data(score_dataframe=df, score_fields_list=fields_list)
         pltmodel.set_parameters(rawpoints, stdpoints)
         pltmodel.run()
         pltmodel.report()

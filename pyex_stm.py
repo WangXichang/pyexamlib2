@@ -91,6 +91,8 @@ class ScoreTransformModel(object):
         self.output_score_decimals = 0
         self.output_report_doc = ''
 
+        self.sys_pricision_decimals = 6  #
+
     def set_data(self, rawdf=None, scorefields=None):
         raise NotImplementedError()
         # define in subclass
@@ -308,10 +310,8 @@ class PltScoreModel(ScoreTransformModel):
     # --------------property set end
 
     def __getcoeff(self):
-        # the format is y = (y2-y1)/(x2 -x1) * (x - x1) + y1
+        # formula: y = (y2-y1)/(x2 -x1) * (x - x1) + y1
         # coeff = (y2-y1)/(x2 -x1)
-        # bias  = y1
-        # rawStartpoint = x1
         for i in range(1, len(self.output_score_points)):
             if (self.result_input_score_points[i] - self.result_input_score_points[i - 1]) < 0.1**6:
                 print('input score percent is not differrentiable or error order,{}-{}'.format(i, i-1))
@@ -324,8 +324,9 @@ class PltScoreModel(ScoreTransformModel):
                 coff = 0
             y1 = self.output_score_points[i - 1]
             x1 = self.result_input_score_points[i - 1]
-            coff = np.round(coff, 4)  # math.floor(coff*10000)/10000
+            coff = np.round(coff, self.sys_pricision_decimals)  # old: math.floor(coff*10000)/10000
             self.result_pltCoeff[i] = [coff, x1, y1]
+
         return True
 
     def __get_plt_score(self, x):
@@ -365,10 +366,11 @@ class PltScoreModel(ScoreTransformModel):
         # claculate _rawScorePoints
         if field in self.output_score_dataframe.columns.values:
             __rawdfdesc = self.output_score_dataframe[field].describe(self.input_score_percentage_points)
-            # self.result_input_score_points = []
-            # for f in __rawdfdesc.index:
-            #    if '%' in f:
-            self.result_input_score_points = [int(__rawdfdesc.loc[f]) if self.output_score_decimals==0
+            # self.result_input_score_points = [__rawdfdesc.loc[f]
+            #                                  for f in __rawdfdesc.index if '%' in f]
+            self.result_input_score_points = [int(__rawdfdesc.loc[f])
+                                              if self.output_score_dataframe[field].dtype.name in
+                                                 ['int', 'int8', 'int16', 'int32', 'int64']
                                               else __rawdfdesc.loc[f]
                                               for f in __rawdfdesc.index if '%' in f]
         else:

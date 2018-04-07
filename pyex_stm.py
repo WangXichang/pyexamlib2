@@ -145,10 +145,10 @@ class ScoreTransformModel(object):
             return
         plt.figure(self.model_name + ' out score figure')
         labelstr = 'outscore: '
-        for osf in self.ouput_score_dataframe.columns.values:
+        for osf in self.output_score_dataframe.columns.values:
             if '_' in osf:  # find sf_outscore field
                 labelstr = labelstr + ' ' + osf
-                plt.plot(self.ouput_score_dataframe.groupby(osf)[osf].count())
+                plt.plot(self.output_score_dataframe.groupby(osf)[osf].count())
                 plt.xlabel(labelstr)
         return
 
@@ -170,16 +170,19 @@ class PltScoreModel(ScoreTransformModel):
     '''
 
     def __init__(self):
-        # intit rawdf, scorefields, outdf, modelname
+        # intit input_df, input_scorefields, output_df, model_name
         super(PltScoreModel, self).__init__()
         self.model_name = 'plt'  # 'Pieceise Linear Transform Model'
 
         # new properties for linear segment stdscore
-        self.__stdScorePoints = []
-        self.__rawScorePercentPoints = []
-        self.__rawScorePoints__ = []
+        self.input_score_percentage_points = []
+        self.output_score_points = []
+
+        # result
+        self.result_input_score_points = []
         self.result_pltCoeff = {}
-        self.__formulastr = ''
+        self.result_formula = ''
+        self.result_all_dict = {}
 
         return
 
@@ -209,13 +212,13 @@ class PltScoreModel(ScoreTransformModel):
                        input_score_min=0,
                        input_score_max=150):
         if (type(input_score_percent_list) != list) | (type(output_score_points_list) != list):
-            print('rawscorepoints or stdscorepoints is not list type!')
+            print('input score points or output score points is not list!')
             return
         if len(input_score_percent_list) != len(output_score_points_list):
-            print('len is not same for rawscorepoints and stdscorepoint list!')
+            print('the number of input score points is not same as output score points!')
             return
-        self.__rawScorePercentPoints = input_score_percent_list
-        self.__stdScorePoints = output_score_points_list
+        self.input_score_percentage_points = input_score_percent_list
+        self.output_score_points = output_score_points_list
         self.input_score_min = input_score_min
         self.input_score_max = input_score_max
 
@@ -223,11 +226,11 @@ class PltScoreModel(ScoreTransformModel):
         if not self.input_score_fields_list:
             print('no score field assign in scorefields!')
             return False
-        if (type(self.__rawScorePercentPoints) != list) | (type(self.__stdScorePoints) != list):
+        if (type(self.input_score_percentage_points) != list) | (type(self.output_score_points) != list):
             print('rawscorepoints or stdscorepoints is not list type!')
             return False
-        if (len(self.__rawScorePercentPoints) != len(self.__stdScorePoints)) | \
-                len(self.__rawScorePercentPoints) == 0:
+        if (len(self.input_score_percentage_points) != len(self.output_score_points)) | \
+                len(self.input_score_percentage_points) == 0:
             print('len is 0 or not same for raw score percent and std score points list!')
             return False
         return True
@@ -239,6 +242,7 @@ class PltScoreModel(ScoreTransformModel):
 
         # transform score on each field
         df = self.input_score_dataframe.copy()
+        self.result_all_dict = {}
         result_dataframe = None
         result_report_save = ''
         for i, fs in enumerate(self.input_score_fields_list):
@@ -252,11 +256,11 @@ class PltScoreModel(ScoreTransformModel):
             if not self.__preprocess(fs):
                 print('fail to initializing !')
                 return
-            # transform score
 
-            score_list = list(df2[fs].apply(self.__get_plt_score))  # , self.output_score_decimals
+            # transform score
+            score_list = df2[fs].apply(self.__get_plt_score, self.output_score_decimals)
             self.output_score_dataframe.loc[:, (fs + '_plt')] = score_list
-            self._create_report()
+            self._create_report(fs)
             # print(self.output_score_dataframe.head())
 
             if i == 0:
@@ -268,23 +272,35 @@ class PltScoreModel(ScoreTransformModel):
             # result_dataframe[fs] = self.output_score_dataframe
             result_report_save += self.output_report_doc
 
+            # save result
+            self.result_all_dict[fs] = {
+                'input_score_points': self.result_input_score_points,
+                'coeff': self.result_pltCoeff,
+                'formulas': self.result_formula}
+
         self.output_report_doc = result_report_save
-        self.output_score_dataframe = result_dataframe
+        self.output_score_dataframe = result_dataframe.fillna(-1)
 
 
-    def _create_report(self):
-        self.__formulastr = ['{0}*(x-{1})+{2}'.format(x[0], x[1], x[2])
-                             for x in self.result_pltCoeff.values()]
-        self.output_report_doc = '\nraw score percent:{}'.format(self.__rawScorePercentPoints)
-        self.output_report_doc += '\nraw score points :{}'.format(self.__rawScorePoints__)
-        self.output_report_doc += '\nstd score points :{}'.format(self.__stdScorePoints)
-        self.output_report_doc += '\nformulacoefficent:{}'.format(self.result_pltCoeff)
-        self.output_report_doc += '\n formula descrbes:{}'.format(self.__formulastr)
+    def _create_report(self, field=''):
+        self.result_formula = ['{0}*(x-{1})+{2}'.format(x[0], x[1], x[2])
+                               for x in self.result_pltCoeff.values()]
+        self.output_report_doc = '---<< score field: {} >>---'.format(field)
+        self.output_report_doc += '\nraw score percentage: {}'.format(self.input_score_percentage_points)
+        self.output_report_doc += '\nraw score  endpoints: {}'.format(self.result_input_score_points)
+        self.output_report_doc += '\nstd score  endpoints: {}'.format(self.output_score_points)
+        #self.output_report_doc += '\n     coefficents :{}'.format(self.result_pltCoeff)
+        self.output_report_doc += '\n        formulas: {}\n'.format(self.result_formula)
+        self.output_report_doc += '---'*20 + '\n\n'
 
     def report(self):
         print(self.output_report_doc)
 
     def plot(self, mode='raw'):
+        if mode not in ['raw', 'out', 'model']:
+            print('valid mode is: raw, out, model')
+            print('mode:model describe the differrence of input and output score.')
+            return
         if mode == 'model':
             self.__plotmodel()
         elif not super().plot(mode):
@@ -297,25 +313,25 @@ class PltScoreModel(ScoreTransformModel):
         # coeff = (y2-y1)/(x2 -x1)
         # bias  = y1
         # rawStartpoint = x1
-        for i in range(1, len(self.__stdScorePoints)):
-            if (self.__rawScorePoints__[i] + self.__rawScorePoints__[i-1]) < 0.1**6:
+        for i in range(1, len(self.output_score_points)):
+            if (self.result_input_score_points[i] + self.result_input_score_points[i - 1]) < 0.1**6:
                 print('raw score percent is not differrentiable,{}-{}'.format(i, i-1))
                 return False
-            if self.__rawScorePoints__[i] - self.__rawScorePoints__[i - 1] != 0:
-                coff = (self.__stdScorePoints[i] - self.__stdScorePoints[i - 1]) / \
-                       (self.__rawScorePoints__[i] - self.__rawScorePoints__[i - 1])
+            if self.result_input_score_points[i] - self.result_input_score_points[i - 1] != 0:
+                coff = (self.output_score_points[i] - self.output_score_points[i - 1]) / \
+                       (self.result_input_score_points[i] - self.result_input_score_points[i - 1])
             else:
                 print('raw score points[{0} - {1}] same confilct!'.format(i-1, i))
                 coff = 0
-            y1 = self.__stdScorePoints[i - 1]
-            x1 = self.__rawScorePoints__[i - 1]
+            y1 = self.output_score_points[i - 1]
+            x1 = self.result_input_score_points[i - 1]
             coff = math.floor(coff*10000)/10000
             self.result_pltCoeff[i] = [coff, x1, y1]
         return True
 
     def __get_plt_score(self, x):
-        for i in range(1, len(self.__stdScorePoints)):
-            if x <= self.__rawScorePoints__[i]:
+        for i in range(1, len(self.output_score_points)):
+            if x <= self.result_input_score_points[i]:
                 if self.output_score_decimals > 0:
                     return np.round(self.result_pltCoeff[i][0] * (x - self.result_pltCoeff[i][1]) +
                                     self.result_pltCoeff[i][2],
@@ -330,31 +346,31 @@ class PltScoreModel(ScoreTransformModel):
         if type(self.input_score_dataframe) != pd.DataFrame:
             print('no dataset given!')
             return False
-        if not self.__stdScorePoints:
+        if not self.output_score_points:
             print('no standard score interval points given!')
             return False
-        if not self.__rawScorePercentPoints:
+        if not self.input_score_percentage_points:
             print('no score interval percent given!')
             return False
-        if len(self.__rawScorePercentPoints) != len(self.__stdScorePoints):
+        if len(self.input_score_percentage_points) != len(self.output_score_points):
             print('score interval for rawscore and stdscore is not same!')
-            print(self.__stdScorePoints, self.__rawScorePercentPoints)
+            print(self.output_score_points, self.input_score_percentage_points)
             return False
-        if self.__stdScorePoints != sorted(self.__stdScorePoints):
+        if self.output_score_points != sorted(self.output_score_points):
             print('stdscore points is not in order!')
             return False
-        if sum([0 if (x <= 1) & (x >= 0) else 1 for x in self.__rawScorePercentPoints]) > 0:
-            print('raw score interval percent is not percent value !\n', self.__rawScorePercentPoints)
+        if sum([0 if (x <= 1) & (x >= 0) else 1 for x in self.input_score_percentage_points]) > 0:
+            print('raw score interval percent is not percent value !\n', self.input_score_percentage_points)
             return False
 
         # claculate _rawScorePoints
         if field in self.output_score_dataframe.columns.values:
-            __rawdfdesc = self.output_score_dataframe[field].describe(self.__rawScorePercentPoints)
+            __rawdfdesc = self.output_score_dataframe[field].describe(self.input_score_percentage_points)
             # calculating _rawScorePoints
-            self.__rawScorePoints__ = []
+            self.result_input_score_points = []
             for f in __rawdfdesc.index:
                 if '%' in f:
-                    self.__rawScorePoints__ += [__rawdfdesc.loc[f]]
+                    self.result_input_score_points += [__rawdfdesc.loc[f]]
         else:
             print('error score field name!')
             print('not in ' + self.input_score_dataframe.columns.values)
@@ -375,12 +391,12 @@ class PltScoreModel(ScoreTransformModel):
 
     def __plotmodel(self):
         plt.figure('Piecewise Linear Score Transform: {0}'.format(self.input_score_fields_list))
-        plen = len(self.__rawScorePoints__)
-        plt.xlim(self.__rawScorePoints__[0], self.__rawScorePoints__[plen - 1])
-        plt.ylim(self.__stdScorePoints[0], self.__stdScorePoints[plen-1])
-        plt.plot(self.__rawScorePoints__, self.__stdScorePoints)
-        plt.plot([self.__rawScorePoints__[0], self.__rawScorePoints__[plen - 1]],
-                 [self.__rawScorePoints__[0], self.__rawScorePoints__[plen - 1]],
+        plen = len(self.result_input_score_points)
+        plt.xlim(self.result_input_score_points[0], self.result_input_score_points[plen - 1])
+        plt.ylim(self.output_score_points[0], self.output_score_points[plen - 1])
+        plt.plot(self.result_input_score_points, self.output_score_points)
+        plt.plot([self.result_input_score_points[0], self.result_input_score_points[plen - 1]],
+                 [self.result_input_score_points[0], self.result_input_score_points[plen - 1]],
                  )
         plt.xlabel('piecewise linear transform model')
         plt.show()

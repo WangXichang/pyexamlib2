@@ -1,12 +1,15 @@
 # -*- utf-8 -*-
 
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-import math
+# import math
 import time
 import pyex_seg as ps
 import pyex_lib as pl
+import scipy.stats as sts
+
 
 import warnings
 warnings.simplefilter('error')
@@ -41,7 +44,7 @@ def test_model(name='plt', df=None, fieldnames='sf', decimals=0):
     if name == 'zt':
         zm = ZscoreByTable()
         zm.set_data(scoredf, [fieldnames])
-        zm.set_parameters(stdnum=4, rawscore_max=150, rawscore_min=0)
+        zm.set_parameters(std_num=4, rawscore_max=150, rawscore_min=0)
         zm.run()
         zm.report()
         return zm
@@ -55,7 +58,7 @@ def test_model(name='plt', df=None, fieldnames='sf', decimals=0):
     if name == 'tzl':
         tm = TZscoreLinear()
         tm.set_data(scoredf, [fieldnames])
-        tm.set_parameters(rawscore_max=100, rawscore_min=0)
+        tm.set_parameters(input_score_max=100, input_score_min=0)
         tm.run()
         tm.report()
         return tm
@@ -79,8 +82,8 @@ class ScoreTransformModel(object):
     标准分数可以通过线性转换，也可以通过非线性转换得到，
     由此可将标准分数分为线性转换的标准分数与非线性转换的标准分数。
     """
-    def __init__(self):
-        self.model_name = ''
+    def __init__(self, model_name=''):
+        self.model_name = model_name
 
         self.input_score_dataframe = pd.DataFrame()
         self.input_score_fields_list = []
@@ -173,8 +176,8 @@ class PltScoreModel(ScoreTransformModel):
 
     def __init__(self):
         # intit input_df, input_scorefields, output_df, model_name
-        super(PltScoreModel, self).__init__()
-        self.model_name = 'plt'  # 'Pieceise Linear Transform Model'
+        super(PltScoreModel, self).__init__('plt')
+        # self.model_name = 'plt'  # 'Pieceise Linear Transform Model'
 
         # new properties for linear segment stdscore
         self.input_score_percentage_points = []
@@ -444,8 +447,8 @@ class ZscoreByTable(ScoreTransformModel):
     MinError = 0.1 ** 9
 
     def __init__(self):
-        super(ZscoreByTable, self).__init__()
-        self.model_name = 'zt'
+        super(ZscoreByTable, self).__init__('zt')
+        # self.model_name = 'zt'
         self.stdNum = 3
         self.maxRawscore = 150
         self.minRawscore = 0
@@ -456,12 +459,14 @@ class ZscoreByTable(ScoreTransformModel):
         self._normtable = pl.create_normaltable(self._samplesize, stdnum=4)
         self._normtable.loc[max(self._normtable.index), 'cdf'] = 1
 
-    def set_data(self, rawdf=None, scorefields=None):
-        self.rawdf = rawdf
-        self.scorefields = scorefields
+    def set_data(self,
+                 input_score_dataframe=None,
+                 input_score_fields_list=None):
+        self.input_score_dataframe = input_score_dataframe
+        self.input_score_fields_list = input_score_fields_list
 
-    def set_parameters(self, stdnum=3, rawscore_max=100, rawscore_min=0):
-        self.stdNum = stdnum
+    def set_parameters(self, std_num=3, rawscore_max=100, rawscore_min=0):
+        self.stdNum = std_num
         self.maxRawscore = rawscore_max
         self.minRawscore = rawscore_min
 
@@ -478,19 +483,24 @@ class ZscoreByTable(ScoreTransformModel):
         # check data and parameter in super
         if not super().run():
             return
-        self.output_score_dataframe = self.rawdf[self.scorefields]
-        self._segtable = self.__getsegtable(
-            self.output_score_dataframe, self.maxRawscore, self.minRawscore, self.scorefields)
-        for sf in self.scorefields:
+        self.output_score_dataframe = self.input_score_dataframe[self.input_score_fields_list]
+        self._segtable = self.__get_segtable(
+            self.output_score_dataframe,
+            self.maxRawscore,
+            self.minRawscore,
+            self.input_score_fields_list)
+        for sf in self.input_score_fields_list:
             print('start run...')
             st = time.clock()
             self._calczscoretable(sf)
             # print(f'zscoretable finished with {time.clock()-st} consumed')
-            self.output_score_dataframe.loc[:, sf + '_zscore'] = self.output_score_dataframe[sf].\
-                apply(lambda x: x if x in self._segtable.seg.values else np.NaN)
+            df = self.output_score_dataframe.copy()
+            df.loc[:, sf+'_zscore'] = df[sf].apply(lambda x: x if x in self._segtable.seg.values else -1)
+            self.output_score_dataframe = df
             self.output_score_dataframe.loc[:, sf + '_zscore'] = \
                 self.output_score_dataframe[sf + '_zscore'].replace(self._segtable.seg.values,
                                                                     self._segtable[sf+'_zscore'].values)
+
             print(f'zscore transoform finished with {round(time.clock()-st,2)} consumed')
 
     def _calczscoretable(self, sf):
@@ -509,11 +519,11 @@ class ZscoreByTable(ScoreTransformModel):
         return max(-self.stdNum, min(y, self.stdNum))
 
     @staticmethod
-    def __getsegtable(df, maxscore, minscore, scorefieldnamelist):
+    def __get_segtable(df, maxscore, minscore, scorefieldnamelist):
         """no sort problem in this segtable usage"""
         seg = ps.SegTable()
         seg.set_data(df, scorefieldnamelist)
-        seg.set_parameters(segmax=maxscore, segmin=minscore)
+        seg.set_parameters(segmax=maxscore, segmin=minscore, segsort='ascending')
         seg.run()
         return seg.segdf
 
@@ -522,7 +532,7 @@ class ZscoreByTable(ScoreTransformModel):
             print('output score desc:\n', self.output_score_dataframe.describe())
         else:
             print('output score data is not ready!')
-        print(f'data fields in rawscore:{self.scorefields}')
+        print(f'data fields in rawscore:{self.input_score_fields_list}')
         print('parameters:')
         print(f'\tzscore stadard diff numbers:{self.stdNum}')
         print(f'\tmax score in raw score:{self.maxRawscore}')
@@ -542,8 +552,9 @@ class TscoreByTable(ScoreTransformModel):
     对智力测验，尤其是提出智商这一概念所作出的巨大贡献。'''
 
     def __init__(self):
-        super().__init__()
-        self.model_name = 't'
+        super().__init__('t')
+        # self.model_name = 't'
+
         self.rscore_max = 150
         self.rscore_min = 0
         self.tscore_std = 10
@@ -564,7 +575,7 @@ class TscoreByTable(ScoreTransformModel):
     def run(self):
         zm = ZscoreByTable()
         zm.set_data(self.input_score_dataframe, self.input_score_fields_list)
-        zm.set_parameters(stdnum=self.tscore_stdnum, rawscore_min=self.rscore_min,
+        zm.set_parameters(std_num=self.tscore_stdnum, rawscore_min=self.rscore_min,
                           rawscore_max=self.rscore_max)
         zm.run()
         self.output_score_dataframe = zm.output_score_dataframe
@@ -605,7 +616,8 @@ class TscoreByTable(ScoreTransformModel):
 class TZscoreLinear(ScoreTransformModel):
     """Get Zscore by linear formula: (x-mean)/std"""
     def __init__(self):
-        #super().__init__()
+        super().__init__('tzl')
+
         self.model_name = 'tzl'
         self.rawscore_max = 150
         self.rawscore_min = 0
@@ -617,9 +629,14 @@ class TZscoreLinear(ScoreTransformModel):
         self.input_score_dataframe = input_score_dataframe
         self.input_score_fields_list = input_score_fields_list
 
-    def set_parameters(self, rawscore_max=150, rawscore_min=0, tscore_std=10, tscore_mean=50, tscore_stdnum=4):
-        self.rawscore_max = rawscore_max
-        self.rawscore_min = rawscore_min
+    def set_parameters(self,
+                       input_score_max=150,
+                       input_score_min=0,
+                       tscore_std=10,
+                       tscore_mean=50,
+                       tscore_stdnum=4):
+        self.rawscore_max = input_score_max
+        self.rawscore_min = input_score_min
         self.tscore_mean = tscore_mean
         self.tscore_std = tscore_std
         self.tscore_stdnum = tscore_stdnum
@@ -639,13 +656,14 @@ class TZscoreLinear(ScoreTransformModel):
 
     def run(self):
         super().run()
-        self.outdf = self.input_score_dataframe[self.input_score_fields_list]
+        self.output_score_dataframe = self.input_score_dataframe[self.input_score_fields_list]
         for sf in self.input_score_fields_list:
-            rmean, rstd = self.outdf[[sf]].describe().loc[['mean', 'std']].values[:, 0]
-            self.outdf[sf+'_zscore'] = \
-                self.outdf[sf].apply(lambda x:
-                                     min(max((x - rmean) / rstd, -self.tscore_stdnum), self.tscore_stdnum))
-            self.outdf.loc[:, sf+'_tscore'] = self.outdf[sf+'_zscore'].\
+            rmean, rstd = self.output_score_dataframe[[sf]].describe().loc[['mean', 'std']].values[:, 0]
+            self.output_score_dataframe[sf + '_zscore'] = \
+                self.output_score_dataframe[sf].apply(
+                    lambda x: min(max((x - rmean) / rstd, -self.tscore_stdnum), self.tscore_stdnum))
+            self.output_score_dataframe.loc[:, sf + '_tscore'] = \
+                self.output_score_dataframe[sf + '_zscore'].\
                 apply(lambda x: x * self.tscore_std + self.tscore_mean)
 
     def report(self):
@@ -657,9 +675,9 @@ class TZscoreLinear(ScoreTransformModel):
             print('-'*50)
         else:
             print('output score data is not ready!')
-        if type(self.outdf) == pd.DataFrame:
+        if type(self.output_score_dataframe) == pd.DataFrame:
             print('raw,T,Z score desc:')
-            pl.report_stats_describe(self.outdf)
+            pl.report_stats_describe(self.output_score_dataframe)
             print('-'*50)
         else:
             print('output score data is not ready!')
@@ -684,8 +702,9 @@ class L9score(ScoreTransformModel):
 
     """
     def __init__(self):
-        # super().__init__('l9')
-        self.model_name = 'l9'
+        super().__init__('l9')
+        # self.model_name = 'l9'
+
         self.rawscore_max = 100
         self.rawscore_min = 0
         self.levelscoretable = {1: [0, 0.04], 2: [0.04, 0.11], 3: [0.11, 0.23], 4: [0.23, 0.4], 5: [0.4, 0.6],

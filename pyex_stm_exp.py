@@ -5,6 +5,7 @@ import pyex_stm as stm
 import pandas as pd
 
 
+# mode: plt-sd20, plt, tscore, zscore, L9
 def test_model(name='plt-sd20',
                input_dataframe=None,
                input_fields_list=(),
@@ -51,28 +52,28 @@ def test_model(name='plt-sd20',
         pltmodel.plot('raw')   # plot raw score figure, else 'std', 'model'
         return pltmodel
 
-    if name == 'zt':
+    if name == 'zscore':
         zm = stm.ZscoreByTable()
         zm.set_data(input_dataframe, input_fields_list)
-        zm.set_parameters(stdnum=4, rawscore_max=150, rawscore_min=0)
+        zm.set_parameters(std_num=4, rawscore_max=150, rawscore_min=0)
         zm.run()
         zm.report()
         return zm
-    if name == 'tt':
+    if name == 'tscore':
         tm = stm.TscoreByTable()
         tm.set_data(input_dataframe, input_fields_list)
         tm.set_parameters(rawscore_max=150, rawscore_min=0)
         tm.run()
         tm.report()
         return tm
-    if name == 'tzl':
+    if name == 'tlinear':
         tm = stm.TZscoreLinear()
         tm.set_data(input_dataframe, input_fields_list)
-        tm.set_parameters(rawscore_max=100, rawscore_min=0)
+        tm.set_parameters(input_score_max=100, input_score_min=0)
         tm.run()
         tm.report()
         return tm
-    if name == 'l9':
+    if name.upper() == 'L9':
         tm = stm.L9score()
         tm.set_data(input_dataframe, input_fields_list)
         tm.set_parameters(rawscore_max=100, rawscore_min=0)

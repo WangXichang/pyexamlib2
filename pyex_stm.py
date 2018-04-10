@@ -527,6 +527,23 @@ class ZscoreByTable(ScoreTransformModel):
         seg.run()
         return seg.segdf
 
+    @staticmethod
+    def get_normtable(stdnum=4, precise=4):
+        cdf_list = []
+        sv_list = []
+        pdf_list = []
+        cdf0 = 0
+        scope = stdnum * 2 * 10**precise + 1
+        for x in range(scope):
+            sv = -stdnum + x/10**precise
+            cdf = sts.norm.cdf(sv)
+            pdf = cdf - cdf0
+            cdf0 = cdf
+            pdf_list.append(pdf)
+            sv_list.append(sv)
+            cdf_list.append(cdf)
+        return pd.DataFrame({'pdf': pdf_list, 'sv': sv_list, 'cdf': cdf_list})
+
     def report(self):
         if type(self.output_score_dataframe) == pd.DataFrame:
             print('output score desc:\n', self.output_score_dataframe.describe())
@@ -591,13 +608,18 @@ class TscoreByTable(ScoreTransformModel):
         print('-' * 50)
         if type(self.input_score_dataframe) == pd.DataFrame:
             print('raw score desc:')
-            pl.report_stats_describe(self.input_score_dataframe)
+            print('    fields:', self.input_score_fields_list)
+            pl.report_stats_describe(
+                self.input_score_dataframe[self.input_score_fields_list])
             print('-'*50)
         else:
             print('output score data is not ready!')
         if type(self.output_score_dataframe) == pd.DataFrame:
+            out_fields = [f+'_tscore' for f in self.input_score_fields_list]
             print('T-score desc:')
-            pl.report_stats_describe(self.output_score_dataframe)
+            print('    fields:', out_fields)
+            pl.report_stats_describe(
+                self.output_score_dataframe[out_fields])
             print('-'*50)
         else:
             print('output score data is not ready!')

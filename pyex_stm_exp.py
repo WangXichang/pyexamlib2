@@ -55,7 +55,7 @@ def test_model(name='plt-sd20',
     if name == 'zscore':
         zm = stm.ZscoreByTable()
         zm.set_data(input_dataframe, input_fields_list)
-        zm.set_parameters(std_num=4, rawscore_max=150, rawscore_min=0)
+        zm.set_parameters(zscore_stdnum=4, input_score_max=150, input_score_min=0, zscore_precise=4)
         zm.run()
         zm.report()
         return zm

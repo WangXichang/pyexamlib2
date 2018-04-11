@@ -44,7 +44,7 @@ def test_model(name='plt', df=None, fieldnames='sf', decimals=0):
     if name == 'zt':
         zm = ZscoreByTable()
         zm.set_data(scoredf, [fieldnames])
-        zm.set_parameters(std_num=4, rawscore_max=150, rawscore_min=0)
+        zm.set_parameters(zscore_stdnum=4, input_score_max=150, input_score_min=0)
         zm.run()
         zm.report()
         return zm
@@ -449,14 +449,20 @@ class ZscoreByTable(ScoreTransformModel):
     def __init__(self):
         super(ZscoreByTable, self).__init__('zt')
         # self.model_name = 'zt'
-        self.stdNum = 3
-        self.maxRawscore = 150
-        self.minRawscore = 0
+        self.zscore_stdnum = 4
+        self.zscore_precise = 3
+        self.input_score_max = 150
+        self.input_score_min = 0
+
+
         self._segtable = None
         self.__currentfield = None
+
         # create norm table
-        self._samplesize = 100000    # cdf error is less than 0.0001
-        self._normtable = pl.create_normaltable(self._samplesize, stdnum=4)
+        # self._samplesize = 100000    # cdf error is less than 0.0001
+        # self._normtable = pl.create_normaltable(self._samplesize, stdnum=4)
+        self._normtable = self.get_normtable(stdnum=self.zscore_stdnum, precise=3)
+        # max cdf = 1
         self._normtable.loc[max(self._normtable.index), 'cdf'] = 1
 
     def set_data(self,
@@ -465,16 +471,19 @@ class ZscoreByTable(ScoreTransformModel):
         self.input_score_dataframe = input_score_dataframe
         self.input_score_fields_list = input_score_fields_list
 
-    def set_parameters(self, std_num=3, rawscore_max=100, rawscore_min=0):
-        self.stdNum = std_num
-        self.maxRawscore = rawscore_max
-        self.minRawscore = rawscore_min
+    def set_parameters(self, input_score_max=150, input_score_min=0, zscore_stdnum=3, zscore_precise=3):
+        self.input_score_max = input_score_max
+        self.input_score_min = input_score_min
+        if (self.zscore_stdnum != zscore_stdnum) | (self.zscore_precise != zscore_precise):
+            self.zscore_stdnum = zscore_stdnum
+            self.zscore_precise = zscore_precise
+            self._normtable = self.get_normtable(stdnum=self.zscore_stdnum, precise=self.zscore_precise)
 
     def check_parameter(self):
-        if self.maxRawscore <= self.minRawscore:
+        if self.input_score_max <= self.input_score_min:
             print('max raw score or min raw score error!')
             return False
-        if self.stdNum <= 0:
+        if self.zscore_stdnum <= 0:
             print('std number is error!')
             return False
         return True
@@ -483,11 +492,12 @@ class ZscoreByTable(ScoreTransformModel):
         # check data and parameter in super
         if not super().run():
             return
+
         self.output_score_dataframe = self.input_score_dataframe[self.input_score_fields_list]
-        self._segtable = self.__get_segtable(
+        self._segtable = self.get_segtable(
             self.output_score_dataframe,
-            self.maxRawscore,
-            self.minRawscore,
+            self.input_score_max,
+            self.input_score_min,
             self.input_score_fields_list)
         for sf in self.input_score_fields_list:
             print('start run...')
@@ -511,15 +521,18 @@ class ZscoreByTable(ScoreTransformModel):
             print(f'error: not found field{sf+"_percent"}!')
 
     def __get_zscore_from_normtable(self, p):
-        df = self._normtable.loc[self._normtable.cdf >= p - ZscoreByTable.MinError][['sv']].head(1).sv
-        y = df.values[0] if len(df) > 0 else None
+        # df = self._normtable.loc[self._normtable.cdf >= p - ZscoreByTable.MinError][['sv']].head(1).sv
+        # y = df.values[0] if len(df) > 0 else None
+        y = self._normtable.loc[self._normtable.cdf >= p]['sv'].min()
+        if str(y) == 'nan':
+            y = None
         if y is None:
             print(f'error: cdf value[{p}] can not find zscore in normtable!')
             return y
-        return max(-self.stdNum, min(y, self.stdNum))
+        return max(-self.zscore_stdnum, min(y, self.zscore_stdnum))
 
     @staticmethod
-    def __get_segtable(df, maxscore, minscore, scorefieldnamelist):
+    def get_segtable(df, maxscore, minscore, scorefieldnamelist):
         """no sort problem in this segtable usage"""
         seg = ps.SegTable()
         seg.set_data(df, scorefieldnamelist)
@@ -528,7 +541,7 @@ class ZscoreByTable(ScoreTransformModel):
         return seg.segdf
 
     @staticmethod
-    def get_normtable(stdnum=4, precise=4):
+    def get_normtable(stdnum=4, precise=3):
         cdf_list = []
         sv_list = []
         pdf_list = []
@@ -539,8 +552,8 @@ class ZscoreByTable(ScoreTransformModel):
             cdf = sts.norm.cdf(sv)
             pdf = cdf - cdf0
             cdf0 = cdf
-            pdf_list.append(pdf)
             sv_list.append(sv)
+            pdf_list.append(pdf)
             cdf_list.append(cdf)
         return pd.DataFrame({'pdf': pdf_list, 'sv': sv_list, 'cdf': cdf_list})
 
@@ -551,9 +564,9 @@ class ZscoreByTable(ScoreTransformModel):
             print('output score data is not ready!')
         print(f'data fields in rawscore:{self.input_score_fields_list}')
         print('parameters:')
-        print(f'\tzscore stadard diff numbers:{self.stdNum}')
-        print(f'\tmax score in raw score:{self.maxRawscore}')
-        print(f'\tmin score in raw score:{self.minRawscore}')
+        print(f'\tzscore stadard diff numbers:{self.zscore_stdnum}')
+        print(f'\tmax score in raw score:{self.input_score_max}')
+        print(f'\tmin score in raw score:{self.input_score_min}')
 
     def plot(self, mode='out'):
         if mode in 'raw,out':
@@ -592,8 +605,8 @@ class TscoreByTable(ScoreTransformModel):
     def run(self):
         zm = ZscoreByTable()
         zm.set_data(self.input_score_dataframe, self.input_score_fields_list)
-        zm.set_parameters(std_num=self.tscore_stdnum, rawscore_min=self.rscore_min,
-                          rawscore_max=self.rscore_max)
+        zm.set_parameters(zscore_stdnum=self.tscore_stdnum, input_score_min=self.rscore_min,
+                          input_score_max=self.rscore_max)
         zm.run()
         self.output_score_dataframe = zm.output_score_dataframe
         namelist = self.output_score_dataframe.columns
